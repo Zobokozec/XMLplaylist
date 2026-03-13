@@ -6,6 +6,14 @@ Použití:
     xmlplaylist playlist.mlp --data @tracks.json --prepis
     echo '{"title":"Song"}' | xmlplaylist playlist.mlp
     xmlplaylist playlist.mlp --data @tracks.json --config config.yaml --dir ~/playlists
+
+    # Jednoduchá šablona vždy:
+    xmlplaylist playlist.mlp --data @tracks.json --template intro.mlp
+
+    # Výběr šablony dle názvu souboru (KEY=PATH páry):
+    xmlplaylist show_NOC.mlp --data @tracks.json --templates NOC=noc.mlp DEN=den.mlp
+    xmlplaylist show_NOC.mlp --data @tracks.json \\
+        --templates NOC=noc.mlp DEN=den.mlp default=base.mlp
 """
 from __future__ import annotations
 
@@ -18,6 +26,19 @@ from .config import load_config
 from .core import export_to_xml
 
 
+def _parse_templates(pairs: list[str]) -> dict[str, str]:
+    """Převede seznam 'KEY=PATH' stringů na slovník."""
+    result: dict[str, str] = {}
+    for pair in pairs:
+        if "=" not in pair:
+            raise argparse.ArgumentTypeError(
+                f"--templates: neplatný formát '{pair}', očekáváno VZOR=CESTA"
+            )
+        key, _, value = pair.partition("=")
+        result[key.strip()] = value.strip()
+    return result
+
+
 def _build_parser() -> argparse.ArgumentParser:
     p = argparse.ArgumentParser(
         prog="xmlplaylist",
@@ -28,6 +49,7 @@ def _build_parser() -> argparse.ArgumentParser:
             '  xmlplaylist out.mlp -d \'{"title":"Song","artist":"Band"}\'\n'
             "  xmlplaylist out.mlp -d @tracks.json --prepis\n"
             "  cat tracks.json | xmlplaylist out.mlp\n"
+            "  xmlplaylist show_NOC.mlp -d @t.json --templates NOC=noc.mlp DEN=den.mlp\n"
         ),
         formatter_class=argparse.RawDescriptionHelpFormatter,
     )
@@ -63,7 +85,23 @@ def _build_parser() -> argparse.ArgumentParser:
     p.add_argument(
         "--template", "-t",
         metavar="ŠABLONA",
-        help="Šablona (.mlp) vložená na začátek playlistu",
+        help=(
+            "Jedna šablona (.mlp) vložená vždy na začátek playlistu. "
+            "Nelze kombinovat s --templates."
+        ),
+    )
+    p.add_argument(
+        "--templates",
+        metavar="VZOR=CESTA",
+        nargs="+",
+        help=(
+            "Výběr šablony dle názvu výstupního souboru. "
+            "Každý argument ve formátu VZOR=CESTA "
+            "(např. NOC=noc.mlp DEN=den.mlp default=base.mlp). "
+            "Vzor se hledá jako podřetězec v názvu souboru (case-insensitive). "
+            "Klíč 'default' se použije pokud žádný vzor nesedí. "
+            "Nelze kombinovat s --template."
+        ),
     )
     p.add_argument(
         "--format", "-f",
@@ -82,6 +120,11 @@ def main(argv: list[str] | None = None) -> int:
     """Vstupní bod CLI. Vrátí exit kód (0 = ok)."""
     parser = _build_parser()
     args = parser.parse_args(argv)
+
+    # Nesmí být --template i --templates zároveň
+    if args.template and args.templates:
+        parser.error("Nelze kombinovat --template a --templates.")
+        return 1
 
     # --- Načtení JSON dat ---
     if args.data is None:
@@ -111,13 +154,23 @@ def main(argv: list[str] | None = None) -> int:
     cfg = load_config(args.config)
     if args.dir:
         cfg["dir"] = args.dir
-    if args.template:
-        cfg["template"] = args.template
     if args.format:
         cfg["format"] = args.format
 
+    # --- Šablona ---
+    templates = None
+    if args.templates:
+        try:
+            templates = _parse_templates(args.templates)
+        except argparse.ArgumentTypeError as exc:
+            print(f"Chyba: {exc}", file=sys.stderr)
+            return 1
+    elif args.template:
+        templates = args.template  # str → resolve_template vrátí přímo tuto cestu
+
     # --- Export ---
-    result = export_to_xml(args.path, data, prepis=args.prepis, config=cfg)
+    result = export_to_xml(args.path, data, prepis=args.prepis, config=cfg,
+                           templates=templates)
     print(str(result))
     return 0
 

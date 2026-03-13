@@ -292,3 +292,61 @@ def load_template_items(template_path: str | Path) -> list[ET.Element]:
         return []
     tree = ET.parse(path)
     return list(tree.getroot().findall("PlaylistItem"))
+
+
+# ---------------------------------------------------------------------------
+# Výběr šablony podle názvu souboru
+# ---------------------------------------------------------------------------
+
+#: Typ pro parametr templates – jedna cesta nebo slovník vzor→cesta.
+Templates = str | Path | dict[str, "str | Path"] | None
+
+
+def resolve_template(path: str | Path, templates: Templates) -> Path | None:
+    """Vrátí cestu k šabloně odpovídající názvu výstupního souboru.
+
+    Pravidla výběru (při dict):
+      1. Prochází klíče v pořadí vložení (Python 3.7+).
+      2. Porovnává ``klíč.upper()`` jako podřetězec ``basename(path).upper()``.
+      3. Klíč ``"default"`` (case-insensitive) je přeskočen v hlavním průchodu
+         a použit jako záloha pokud žádný jiný vzor nesedí.
+
+    Args:
+        path: Výstupní cesta (porovnává se basename).
+        templates: Jedna cesta (str/Path) → vždy tato šablona.
+                   Dict ``{vzor: cesta}`` → výběr dle názvu souboru.
+                   None → žádná šablona.
+
+    Returns:
+        Path k šabloně, nebo None.
+
+    Příklady::
+
+        resolve_template("show_NOC.mlp", {"NOC": "noc.mlp", "DEN": "den.mlp"})
+        # → Path("noc.mlp")
+
+        resolve_template("random.mlp", {"NOC": "noc.mlp", "default": "base.mlp"})
+        # → Path("base.mlp")
+
+        resolve_template("show.mlp", "always.mlp")
+        # → Path("always.mlp")
+    """
+    if templates is None:
+        return None
+
+    if isinstance(templates, (str, Path)):
+        p = Path(templates)
+        return p if str(templates) else None
+
+    # dict: porovnáme vzory s názvem výstupního souboru
+    name = Path(path).name.upper()
+    default_path: "str | Path | None" = None
+
+    for pattern, tpl_path in templates.items():
+        if pattern.upper() == "DEFAULT":
+            default_path = tpl_path
+            continue
+        if pattern.upper() in name:
+            return Path(tpl_path)
+
+    return Path(default_path) if default_path else None

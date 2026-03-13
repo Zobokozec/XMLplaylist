@@ -10,12 +10,26 @@
 #   dir: /srv/radio/playlists
 dir: ~/playlists
 
-# Šablona – cesta k existujícímu .mlp souboru.
-# Položky ze šablony jsou vloženy na začátek každého exportovaného playlistu
-# (např. intro jingle, reklama, časová znělka).
-# Pokud není nastaveno, šablona se nepoužívá.
+# Šablona – jedna pevná cesta k existujícímu .mlp souboru.
+# Položky ze šablony jsou vloženy na začátek každého exportovaného playlistu.
+# Použijte buď "template" (jedna šablona vždy), nebo "templates" (výběr dle názvu).
 # template: ~/templates/intro.mlp
 template: null
+
+# Šablony dle názvu výstupního souboru.
+# Vzory se porovnávají jako podřetězce v basename souboru (case-insensitive).
+# Klíč "default" se použije pokud žádný jiný vzor nesedí.
+#
+# Příklad – různé šablony pro noční a denní vysílání:
+#   templates:
+#     NOC: ~/templates/noc_intro.mlp
+#     DEN: ~/templates/den_intro.mlp
+#     default: ~/templates/generic_intro.mlp
+#
+# show_NOC.mlp → noc_intro.mlp
+# show_DEN.mlp → den_intro.mlp
+# jiný.mlp     → generic_intro.mlp
+templates: null
 
 # Pole zobrazovaná v Comment elementu každé položky.
 # Pořadí určuje pořadí v textu komentáře.

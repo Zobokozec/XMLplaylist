@@ -12,7 +12,7 @@ import logging
 from pathlib import Path
 from typing import Any
 
-from .builder import build_playlist_xml, load_template_items
+from .builder import build_playlist_xml, load_template_items, resolve_template, Templates
 from .config import load_config
 
 logger = logging.getLogger(__name__)
@@ -24,6 +24,7 @@ def export_to_xml(
     prepis: bool = False,
     config: dict[str, Any] | None = None,
     config_path: str | Path | None = None,
+    templates: Templates = None,
 ) -> Path:
     """Exportuje data tracku/playlistu do XML souboru (.mlp).
 
@@ -39,15 +40,35 @@ def export_to_xml(
               language/jazyk, tempo, style/styl, keywords/klíčová_slova,
               chars (nested dict), filename, duration, type, idx, externalid, …
         prepis: Pokud True, přepíše existující soubor. Výchozí: False.
-        config: Config dict (přepíše načtený config).
-              Volitelný klíč ``music_root`` (str) se přidá před každý <Filename>.
+        config: Config dict. Volitelné klíče:
+                  ``music_root``  – prefix pro <Filename>
+                  ``template``    – cesta k jedné šabloně
+                  ``templates``   – dict {vzor: cesta} pro výběr dle názvu souboru
         config_path: Cesta k YAML config souboru.
+        templates: Šablona/šablony jako parametr – přebíjí config["template"]
+                   i config["templates"].
+                   - str / Path     → vždy tato šablona
+                   - dict           → výběr vzorem podle basename výstupního souboru
+                                      klíč ``"default"`` = záloha pokud žádný nesedí
+                   - None           → čte z config (nebo žádná šablona)
 
     Returns:
         Absolutní Path k výstupnímu souboru.
 
     Raises:
         TypeError: Pokud data nejsou dict ani list.
+
+    Příklady::
+
+        # Jednoduchá šablona vždy
+        export_to_xml("pl.mlp", data, templates="intro.mlp")
+
+        # Výběr dle názvu souboru
+        export_to_xml(
+            "show_NOC.mlp", data,
+            templates={"NOC": "noc_intro.mlp", "DEN": "den_intro.mlp",
+                       "default": "generic_intro.mlp"},
+        )
     """
     cfg = config if config is not None else load_config(config_path)
 
@@ -74,11 +95,17 @@ def export_to_xml(
     format_fields: list[str] = cfg.get("format") or []
     music_root: str = cfg.get("music_root") or ""
 
-    # Šablona
-    template_items = None
-    template_path = cfg.get("template")
-    if template_path:
-        template_items = load_template_items(template_path)
+    # Výběr šablony: parametr přebíjí config
+    effective_templates: Templates
+    if templates is not None:
+        effective_templates = templates
+    elif cfg.get("templates"):
+        effective_templates = cfg["templates"]
+    else:
+        effective_templates = cfg.get("template")  # str/None (původní klíč)
+
+    tpl_path = resolve_template(path, effective_templates)
+    template_items = load_template_items(tpl_path) if tpl_path else None
 
     xml_content = build_playlist_xml(tracks, format_fields, template_items, music_root)
 
@@ -96,6 +123,7 @@ def export_by_ids(
     prepis: bool = False,
     config: dict[str, Any] | None = None,
     config_path: str | Path | None = None,
+    templates: Templates = None,
 ) -> Path:
     """Exportuje playlist načtením tracků z MediaDB podle numerických ID.
 
@@ -108,6 +136,7 @@ def export_by_ids(
         prepis: Přepíše existující soubor. Výchozí: False.
         config: Config dict.
         config_path: Cesta k YAML config souboru.
+        templates: Viz export_to_xml().
 
     Returns:
         Absolutní Path k výstupnímu souboru.
@@ -137,7 +166,7 @@ def export_by_ids(
             len(missing), len(external_ids), missing[:20],
         )
 
-    return export_to_xml(path, rows, prepis=prepis, config=cfg)
+    return export_to_xml(path, rows, prepis=prepis, config=cfg, templates=templates)
 
 
 def export_playlist_xml(

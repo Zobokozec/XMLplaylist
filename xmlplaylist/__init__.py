@@ -26,7 +26,7 @@ Rychlý start:
 """
 from .core import export_to_xml, export_by_ids, export_playlist_xml
 from .config import load_config, load_legacy_config
-from .builder import build_comment, build_playlist_xml, load_template_items
+from .builder import build_comment, build_playlist_xml, load_template_items, resolve_template
 from .db import MediaDBReader, external_id_from_int
 
 __all__ = [
@@ -38,6 +38,7 @@ __all__ = [
     "build_comment",
     "build_playlist_xml",
     "load_template_items",
+    "resolve_template",
     "MediaDBReader",
     "external_id_from_int",
 ]
