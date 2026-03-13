@@ -1,0 +1,53 @@
+# xmlplaylist – příklad konfigurace
+# Uložte jako xmlplaylist.yaml (nebo config.yaml) v pracovním adresáři,
+# nebo předejte přes --config.
+
+# Výchozí adresář pro ukládání playlistů.
+# Relativní cesty v export_to_xml() / CLI jsou vyřešeny vůči tomuto adresáři.
+# Příklady:
+#   dir: ~/playlists
+#   dir: C:\Users\dj\playlists
+#   dir: /srv/radio/playlists
+dir: ~/playlists
+
+# Šablona – jedna pevná cesta k existujícímu .mlp souboru.
+# Položky ze šablony jsou vloženy na začátek každého exportovaného playlistu.
+# Použijte buď "template" (jedna šablona vždy), nebo "templates" (výběr dle názvu).
+# template: ~/templates/intro.mlp
+template: null
+
+# Šablony dle názvu výstupního souboru.
+# Vzory se porovnávají jako podřetězce v basename souboru (case-insensitive).
+# Klíč "default" se použije pokud žádný jiný vzor nesedí.
+#
+# Příklad – různé šablony pro noční a denní vysílání:
+#   templates:
+#     NOC: ~/templates/noc_intro.mlp
+#     DEN: ~/templates/den_intro.mlp
+#     default: ~/templates/generic_intro.mlp
+#
+# show_NOC.mlp → noc_intro.mlp
+# show_DEN.mlp → den_intro.mlp
+# jiný.mlp     → generic_intro.mlp
+templates: null
+
+# Pole zobrazovaná v Comment elementu každé položky.
+# Pořadí určuje pořadí v textu komentáře.
+# Dostupné hodnoty:
+#   pronunciation  – ♪  výslovnost názvu + výslovnost interpreta
+#   artist_info    – ⊙  interpret • /výslovnost/ (rok)
+#   album          – ℹ  název alba
+#   description    – 📖 O písni: …
+#   language       – 🌐 Jazyk: …
+#   tempo          – ⏱  Tempo: …
+#   style          – ♫  Styl: …
+#   keywords       – 🔍 Klíčová slova: …
+format:
+  - pronunciation
+  - artist_info
+  - album
+  - description
+  - language
+  - tempo
+  - style
+  - keywords
