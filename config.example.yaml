@@ -1,0 +1,39 @@
+# xmlplaylist – příklad konfigurace
+# Uložte jako xmlplaylist.yaml (nebo config.yaml) v pracovním adresáři,
+# nebo předejte přes --config.
+
+# Výchozí adresář pro ukládání playlistů.
+# Relativní cesty v export_to_xml() / CLI jsou vyřešeny vůči tomuto adresáři.
+# Příklady:
+#   dir: ~/playlists
+#   dir: C:\Users\dj\playlists
+#   dir: /srv/radio/playlists
+dir: ~/playlists
+
+# Šablona – cesta k existujícímu .mlp souboru.
+# Položky ze šablony jsou vloženy na začátek každého exportovaného playlistu
+# (např. intro jingle, reklama, časová znělka).
+# Pokud není nastaveno, šablona se nepoužívá.
+# template: ~/templates/intro.mlp
+template: null
+
+# Pole zobrazovaná v Comment elementu každé položky.
+# Pořadí určuje pořadí v textu komentáře.
+# Dostupné hodnoty:
+#   pronunciation  – ♪  výslovnost názvu + výslovnost interpreta
+#   artist_info    – ⊙  interpret • /výslovnost/ (rok)
+#   album          – ℹ  název alba
+#   description    – 📖 O písni: …
+#   language       – 🌐 Jazyk: …
+#   tempo          – ⏱  Tempo: …
+#   style          – ♫  Styl: …
+#   keywords       – 🔍 Klíčová slova: …
+format:
+  - pronunciation
+  - artist_info
+  - album
+  - description
+  - language
+  - tempo
+  - style
+  - keywords
