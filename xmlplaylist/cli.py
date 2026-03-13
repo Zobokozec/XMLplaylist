@@ -67,6 +67,14 @@ def _build_parser() -> argparse.ArgumentParser:
         ),
     )
     p.add_argument(
+        "--file", "-i",
+        metavar="SOUBOR",
+        help=(
+            "Cesta k JSON souboru s daty tracku/playlistu. "
+            "Alternativa k --data @soubor, použitelná v PowerShellu."
+        ),
+    )
+    p.add_argument(
         "--prepis", "-p",
         action="store_true",
         default=False,
@@ -127,11 +135,22 @@ def main(argv: list[str] | None = None) -> int:
         return 1
 
     # --- Načtení JSON dat ---
-    if args.data is None:
+    if args.data is not None and args.file is not None:
+        parser.error("Nelze kombinovat --data a --file.")
+        return 1
+
+    if args.file is not None:
+        data_file = Path(args.file)
+        if not data_file.exists():
+            print(f"Chyba: soubor s daty '{data_file}' neexistuje.", file=sys.stderr)
+            return 1
+        raw = data_file.read_text(encoding="utf-8")
+    elif args.data is None:
         if sys.stdin.isatty():
             parser.error(
-                "Zadejte --data nebo přesměrujte JSON na stdin.\n"
-                "Příklad: xmlplaylist out.mlp -d '{\"title\":\"Song\"}'"
+                "Zadejte --data nebo --file nebo přesměrujte JSON na stdin.\n"
+                "Příklad: xmlplaylist out.mlp -d '{\"title\":\"Song\"}'\n"
+                "         xmlplaylist out.mlp --file track.json"
             )
             return 1
         raw = sys.stdin.read()
