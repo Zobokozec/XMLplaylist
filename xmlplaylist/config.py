@@ -28,9 +28,10 @@ DEFAULT_FORMAT: list[str] = [
 ]
 
 DEFAULT_CONFIG: dict[str, Any] = {
-    "dir": None,        # výchozí adresář pro ukládání playlistů
+    "dir": None,          # výchozí adresář pro ukládání playlistů
     "format": DEFAULT_FORMAT,
-    "template": None,   # cesta k šabloně (jiný .mlp soubor)
+    "template": None,     # cesta k šabloně (jiný .mlp soubor)
+    "music_root": "",     # prefix přidaný před cestu k souboru v <Filename>
 }
 
 # Standardní místa hledání config souboru
@@ -71,6 +72,41 @@ def load_config(config_path: str | Path | None = None) -> dict[str, Any]:
             )
 
     return config
+
+
+def load_legacy_config(config_dir: str) -> dict[str, Any]:
+    """Načte konfiguraci z settings.yaml a database.yaml (původní formát).
+
+    Kompatibilní s původním xml_export_lib._load_config(config_dir).
+
+    Args:
+        config_dir: Adresář obsahující settings.yaml a database.yaml.
+
+    Returns:
+        Dict s klíči: music_root, exports_path, media_db_path.
+
+    Raises:
+        ImportError: Pokud PyYAML není nainstalován.
+        FileNotFoundError: Pokud soubory v config_dir neexistují.
+    """
+    import os
+
+    if not _HAS_YAML:
+        raise ImportError("PyYAML není nainstalován. Nainstalujte ho: pip install PyYAML")
+
+    settings_path = os.path.join(config_dir, "settings.yaml")
+    database_path = os.path.join(config_dir, "database.yaml")
+
+    with open(settings_path, encoding="utf-8") as fh:
+        settings = yaml.safe_load(fh) or {}
+    with open(database_path, encoding="utf-8") as fh:
+        database = yaml.safe_load(fh) or {}
+
+    return {
+        "music_root": settings.get("paths", {}).get("music_root", ""),
+        "exports_path": settings.get("paths", {}).get("exports", "data/exports/"),
+        "media_db_path": database.get("sqlite", {}).get("media_db", "data/data.mldb"),
+    }
 
 
 def _find_config() -> Path | None:

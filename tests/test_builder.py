@@ -260,6 +260,18 @@ class TestBuildTrackElement:
         el2 = build_track_element(FULL_TRACK, [])
         assert el1.get("ID") != el2.get("ID")
 
+    def test_music_root_prepended(self):
+        el = build_track_element({"filename": r"PC0671 - song.mp3"}, [], music_root=r"C:\MUSIC\ ")
+        assert el.find("Filename").text.startswith(r"C:\MUSIC\ ")
+
+    def test_music_root_empty_by_default(self):
+        el = build_track_element({"filename": r"C:\song.mp3"}, [])
+        assert el.find("Filename").text == r"C:\song.mp3"
+
+    def test_music_root_combined_with_filename(self):
+        el = build_track_element({"filename": "song.mp3"}, [], music_root="/mnt/music/")
+        assert el.find("Filename").text == "/mnt/music/song.mp3"
+
 
 class TestBuildPlaylistXml:
     """Testy sestavení kompletního XML stringu."""
@@ -320,6 +332,21 @@ class TestBuildPlaylistXml:
         xml = build_playlist_xml([FULL_TRACK, FULL_TRACK], DEFAULT_FORMAT)
         # Nesmí vyhodit výjimku
         ET.fromstring(xml)
+
+    def test_music_root_applied_to_all_tracks(self):
+        tracks = [
+            {"filename": "a.mp3"},
+            {"filename": "b.mp3"},
+        ]
+        xml = build_playlist_xml(tracks, [], music_root="/root/")
+        root = ET.fromstring(xml)
+        for item in root.findall("PlaylistItem"):
+            assert item.find("Filename").text.startswith("/root/")
+
+    def test_music_root_empty_by_default(self):
+        xml = build_playlist_xml([{"filename": "a.mp3"}], [])
+        root = ET.fromstring(xml)
+        assert root.find("PlaylistItem/Filename").text == "a.mp3"
 
 
 class TestLoadTemplateItems:

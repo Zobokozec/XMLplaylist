@@ -187,7 +187,11 @@ def build_comment(data: dict[str, Any], format_fields: list[str]) -> str:
 # Sestavení XML elementů
 # ---------------------------------------------------------------------------
 
-def build_track_element(data: dict[str, Any], format_fields: list[str]) -> ET.Element:
+def build_track_element(
+    data: dict[str, Any],
+    format_fields: list[str],
+    music_root: str = "",
+) -> ET.Element:
     """Vytvoří XML element <PlaylistItem> z dat tracku.
 
     Formát zachován z původního repozitáře (_build_xml v exporter.py).
@@ -195,6 +199,7 @@ def build_track_element(data: dict[str, Any], format_fields: list[str]) -> ET.El
     Args:
         data: Slovník s daty tracku.
         format_fields: Pole pro Comment (dle config["format"]).
+        music_root: Volitelný prefix přidaný před cestu v <Filename>.
 
     Returns:
         xml.etree.ElementTree.Element
@@ -206,7 +211,7 @@ def build_track_element(data: dict[str, Any], format_fields: list[str]) -> ET.El
     artist = _get(data, "artist") or ""
     filename = data.get("filename", "")
 
-    ET.SubElement(item, "Filename").text = str(filename)
+    ET.SubElement(item, "Filename").text = f"{music_root}{filename}"
     ET.SubElement(item, "Title").text = str(title)
     ET.SubElement(item, "Artist").text = str(artist)
     ET.SubElement(item, "Type").text = str(data.get("type", "Music"))
@@ -234,6 +239,7 @@ def build_playlist_xml(
     tracks: list[dict[str, Any]],
     format_fields: list[str],
     template_items: list[ET.Element] | None = None,
+    music_root: str = "",
 ) -> str:
     """Sestaví kompletní XML string playlistu ve formátu mAirList.
 
@@ -241,6 +247,7 @@ def build_playlist_xml(
         tracks: Seznam slovníků s daty tracků.
         format_fields: Pole pro Comment element.
         template_items: Volitelné PlaylistItem elementy vkládané na začátek.
+        music_root: Volitelný prefix přidaný před každou cestu v <Filename>.
 
     Returns:
         XML string s hlavičkou <?xml version="1.0" encoding="UTF-8"?>.
@@ -254,7 +261,7 @@ def build_playlist_xml(
         root.append(tmpl_item)
 
     for track in tracks:
-        root.append(build_track_element(track, format_fields))
+        root.append(build_track_element(track, format_fields, music_root))
 
     raw = ET.tostring(root, encoding="unicode")
     parsed = minidom.parseString(raw)

@@ -1,12 +1,29 @@
-"""Testy pro xmlplaylist.core.export_to_xml."""
+"""Testy pro xmlplaylist.core (export_to_xml, export_by_ids)."""
 import json
+import sqlite3
 import xml.etree.ElementTree as ET
 from pathlib import Path
 
 import pytest
 
-from xmlplaylist.core import export_to_xml
+from xmlplaylist.core import export_to_xml, export_by_ids
 from xmlplaylist.config import DEFAULT_FORMAT
+
+_DB_SCHEMA = """
+CREATE TABLE items (
+    idx INTEGER PRIMARY KEY, externalid TEXT,
+    title TEXT, artist TEXT, type TEXT, duration REAL, filename TEXT
+);
+"""
+
+def _make_db(path: Path) -> None:
+    conn = sqlite3.connect(str(path))
+    conn.executescript(_DB_SCHEMA)
+    conn.execute("INSERT INTO items VALUES (?,?,?,?,?,?,?)",
+        (100, "H039739", "Píseň", "Umělec", "Music", 109.804, "PC0671.mp3"))
+    conn.execute("INSERT INTO items VALUES (?,?,?,?,?,?,?)",
+        (200, "H050000", "Song B", "Artist B", "Music", 240.5, "PC0500.mp3"))
+    conn.commit(); conn.close()
 
 TRACK = {
     "title": "Thank God I Do",
@@ -263,3 +280,94 @@ class TestExportXmlFormat:
         assert "Angličtina" in comment
         assert "Soul" in comment
         assert "úkryt" in comment
+
+    def test_music_root_in_filename(self, tmp_path):
+        out = tmp_path / "p.mlp"
+        cfg = {"format": [], "dir": None, "music_root": r"C:\MUSIC\ "}
+        export_to_xml(out, {"filename": "song.mp3", "title": "T"}, config=cfg)
+        root = ET.fromstring(out.read_text(encoding="utf-8"))
+        filename = root.find("PlaylistItem/Filename").text
+        assert filename == r"C:\MUSIC\ song.mp3"
+
+    def test_music_root_from_config_yaml(self, tmp_path):
+        cfg_file = tmp_path / "config.yaml"
+        cfg_file.write_text("music_root: /srv/music/\nformat: []\n", encoding="utf-8")
+        out = tmp_path / "p.mlp"
+        export_to_xml(out, {"filename": "song.mp3"}, config_path=cfg_file)
+        root = ET.fromstring(out.read_text(encoding="utf-8"))
+        assert root.find("PlaylistItem/Filename").text == "/srv/music/song.mp3"
+
+
+class TestExportByIds:
+    """Testy pro export_by_ids() – načítání z MediaDB."""
+
+    def test_creates_file(self, tmp_path):
+        db = tmp_path / "db.mldb"
+        _make_db(db)
+        out = tmp_path / "playlist.mlp"
+        result = export_by_ids([39739], out, db_path=str(db),
+                               config={"format": [], "dir": None})
+        assert result.exists()
+
+    def test_returns_path(self, tmp_path):
+        db = tmp_path / "db.mldb"
+        _make_db(db)
+        out = tmp_path / "playlist.mlp"
+        result = export_by_ids([39739], out, db_path=str(db),
+                               config={"format": [], "dir": None})
+        assert isinstance(result, Path)
+        assert result.is_absolute()
+
+    def test_track_data_in_xml(self, tmp_path):
+        db = tmp_path / "db.mldb"
+        _make_db(db)
+        out = tmp_path / "playlist.mlp"
+        export_by_ids([39739], out, db_path=str(db),
+                      config={"format": [], "dir": None})
+        root = ET.fromstring(out.read_text(encoding="utf-8"))
+        assert root.find("PlaylistItem/Title").text == "Píseň"
+        assert root.find("PlaylistItem/Artist").text == "Umělec"
+
+    def test_multiple_ids(self, tmp_path):
+        db = tmp_path / "db.mldb"
+        _make_db(db)
+        out = tmp_path / "playlist.mlp"
+        export_by_ids([39739, 50000], out, db_path=str(db),
+                      config={"format": [], "dir": None})
+        root = ET.fromstring(out.read_text(encoding="utf-8"))
+        assert len(root.findall("PlaylistItem")) == 2
+
+    def test_music_root_applied(self, tmp_path):
+        db = tmp_path / "db.mldb"
+        _make_db(db)
+        out = tmp_path / "playlist.mlp"
+        export_by_ids([39739], out, db_path=str(db), music_root="/music/",
+                      config={"format": [], "dir": None})
+        root = ET.fromstring(out.read_text(encoding="utf-8"))
+        assert root.find("PlaylistItem/Filename").text.startswith("/music/")
+
+    def test_raises_if_no_tracks_found(self, tmp_path):
+        db = tmp_path / "db.mldb"
+        _make_db(db)
+        out = tmp_path / "playlist.mlp"
+        with pytest.raises(ValueError, match="nenalezeny"):
+            export_by_ids([999999], out, db_path=str(db),
+                          config={"format": [], "dir": None})
+
+    def test_prepis_false_keeps_existing(self, tmp_path):
+        db = tmp_path / "db.mldb"
+        _make_db(db)
+        out = tmp_path / "playlist.mlp"
+        out.write_text("original", encoding="utf-8")
+        export_by_ids([39739], out, db_path=str(db), prepis=False,
+                      config={"format": [], "dir": None})
+        assert out.read_text(encoding="utf-8") == "original"
+
+    def test_prepis_true_overwrites(self, tmp_path):
+        db = tmp_path / "db.mldb"
+        _make_db(db)
+        out = tmp_path / "playlist.mlp"
+        out.write_text("original", encoding="utf-8")
+        export_by_ids([39739], out, db_path=str(db), prepis=True,
+                      config={"format": [], "dir": None})
+        assert out.read_text(encoding="utf-8") != "original"

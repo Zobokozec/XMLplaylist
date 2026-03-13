@@ -24,16 +24,22 @@ Rychlý start:
     )
     print(path)
 """
-from .core import export_to_xml
-from .config import load_config
+from .core import export_to_xml, export_by_ids, export_playlist_xml
+from .config import load_config, load_legacy_config
 from .builder import build_comment, build_playlist_xml, load_template_items
+from .db import MediaDBReader, external_id_from_int
 
 __all__ = [
     "export_to_xml",
+    "export_by_ids",
+    "export_playlist_xml",
     "load_config",
+    "load_legacy_config",
     "build_comment",
     "build_playlist_xml",
     "load_template_items",
+    "MediaDBReader",
+    "external_id_from_int",
 ]
 
 __version__ = "0.1.0"

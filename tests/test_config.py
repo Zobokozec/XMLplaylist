@@ -4,7 +4,7 @@ from pathlib import Path
 
 import pytest
 
-from xmlplaylist.config import load_config, DEFAULT_FORMAT, DEFAULT_CONFIG
+from xmlplaylist.config import load_config, load_legacy_config, DEFAULT_FORMAT, DEFAULT_CONFIG
 
 
 class TestLoadConfigDefaults:
@@ -87,3 +87,52 @@ class TestLoadConfigFromYaml:
         cfg_file.write_text("custom_key: custom_value\n", encoding="utf-8")
         cfg = load_config(cfg_file)
         assert cfg["custom_key"] == "custom_value"
+
+    def test_music_root_default_empty_string(self):
+        cfg = load_config(config_path=None)
+        assert cfg.get("music_root", "") == ""
+
+    def test_music_root_loaded_from_yaml(self, tmp_path):
+        cfg_file = tmp_path / "config.yaml"
+        cfg_file.write_text("music_root: /srv/music/\n", encoding="utf-8")
+        cfg = load_config(cfg_file)
+        assert cfg["music_root"] == "/srv/music/"
+
+
+class TestLoadLegacyConfig:
+    """Testy pro load_legacy_config() – settings.yaml + database.yaml."""
+
+    def _write_legacy(self, config_dir: Path, music_root: str, db_path: str) -> None:
+        (config_dir / "settings.yaml").write_text(
+            f"paths:\n  music_root: {music_root}\n  exports: data/exports/\n",
+            encoding="utf-8",
+        )
+        (config_dir / "database.yaml").write_text(
+            f"sqlite:\n  media_db: {db_path}\n",
+            encoding="utf-8",
+        )
+
+    def test_reads_music_root(self, tmp_path):
+        self._write_legacy(tmp_path, "/mnt/radio/", "data/db.mldb")
+        cfg = load_legacy_config(str(tmp_path))
+        assert cfg["music_root"] == "/mnt/radio/"
+
+    def test_reads_media_db_path(self, tmp_path):
+        self._write_legacy(tmp_path, "", "data/data.mldb")
+        cfg = load_legacy_config(str(tmp_path))
+        assert cfg["media_db_path"] == "data/data.mldb"
+
+    def test_reads_exports_path(self, tmp_path):
+        self._write_legacy(tmp_path, "", "db.mldb")
+        cfg = load_legacy_config(str(tmp_path))
+        assert cfg["exports_path"] == "data/exports/"
+
+    def test_missing_settings_raises(self, tmp_path):
+        (tmp_path / "database.yaml").write_text("sqlite:\n  media_db: db\n")
+        with pytest.raises(FileNotFoundError):
+            load_legacy_config(str(tmp_path))
+
+    def test_missing_database_raises(self, tmp_path):
+        (tmp_path / "settings.yaml").write_text("paths:\n  music_root: /\n")
+        with pytest.raises(FileNotFoundError):
+            load_legacy_config(str(tmp_path))
