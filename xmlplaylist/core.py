@@ -25,6 +25,7 @@ def export_to_xml(
     config: dict[str, Any] | None = None,
     config_path: str | Path | None = None,
     templates: Templates = None,
+    comment_log: "str | Path | None" = None,
 ) -> Path:
     """Exportuje data tracku/playlistu do XML souboru (.mlp).
 
@@ -107,7 +108,7 @@ def export_to_xml(
     tpl_path = resolve_template(path, effective_templates)
     template_items = load_template_items(tpl_path) if tpl_path else None
 
-    xml_content = build_playlist_xml(tracks, format_fields, template_items, music_root)
+    xml_content = build_playlist_xml(tracks, format_fields, template_items, music_root, comment_log)
 
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(xml_content, encoding="utf-8")

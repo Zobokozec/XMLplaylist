@@ -32,9 +32,9 @@ _DATABASE_GUID = "mAirListDB:{243DD8BD-7D43-46A8-B599-EC65E9F3ABA4}"
 
 # Ikony pro jednotlivá pole
 _ICONS: dict[str, str] = {
-    "pronunciation": "♪",
-    "artist_info":   "⊙",
-    "album":         "ℹ",
+    "pronunciation": "",
+    "artist_info":   "ℹ",
+    "album":         "⊙",
     "description":   "📖",
     "language":      "🌐",
     "tempo":         "⏱",
@@ -153,13 +153,19 @@ def build_comment(data: dict[str, Any], format_fields: list[str]) -> str:
 
         elif field in _meta_section:
             if field == "language":
-                val = _get(data, "language")
-                if val:
+                lang = _get(data, "language")
+                style = _get(data, "style")
+                if lang or style:
                     # Pokud description nebylo přidáno, ale jsou top-sekce, přidáme oddělovač
                     if prev_was_top and not description_added:
                         lines.append(_SEPARATOR)
                         prev_was_top = False
-                    lines.append(f"{_ICONS['language']} Jazyk: {val}")
+                    parts: list[str] = []
+                    if lang:
+                        parts.append(f"{_ICONS['language']} Jazyk: {lang}")
+                    if style:
+                        parts.append(f"{_ICONS['style']} Styl: {_join_list(style)}")
+                    lines.append("          ".join(parts))
 
             elif field == "tempo":
                 val = _get(data, "tempo")
@@ -170,12 +176,7 @@ def build_comment(data: dict[str, Any], format_fields: list[str]) -> str:
                     lines.append(f"{_ICONS['tempo']} Tempo: {val}")
 
             elif field == "style":
-                val = _get(data, "style")
-                if val:
-                    if prev_was_top and not description_added:
-                        lines.append(_SEPARATOR)
-                        prev_was_top = False
-                    lines.append(f"{_ICONS['style']} Styl: {_join_list(val)}")
+                pass  # Styl je sloučen s language
 
             elif field == "keywords":
                 val = _get(data, "keywords")
@@ -245,6 +246,7 @@ def build_playlist_xml(
     format_fields: list[str],
     template_items: list[ET.Element] | None = None,
     music_root: str = "",
+    comment_log: "str | Path | None" = None,
 ) -> str:
     """Sestaví kompletní XML string playlistu ve formátu mAirList.
 
@@ -253,10 +255,14 @@ def build_playlist_xml(
         format_fields: Pole pro Comment element.
         template_items: Volitelné PlaylistItem elementy vkládané na začátek.
         music_root: Volitelný prefix přidaný před každou cestu v <Filename>.
+        comment_log: Volitelná cesta k JSON souboru pro uložení vygenerovaných
+                     komentářů spolu s idx, title a artist – pro ruční úpravu
+                     v databázi. Pokud None, soubor se nevytváří.
 
     Returns:
         XML string s hlavičkou <?xml version="1.0" encoding="UTF-8"?>.
     """
+    import json
     from xml.dom import minidom
 
     root = ET.Element("Playlist")
@@ -265,8 +271,23 @@ def build_playlist_xml(
     for tmpl_item in (template_items or []):
         root.append(tmpl_item)
 
+    log_entries: list[dict[str, Any]] = []
+
     for track in tracks:
         root.append(build_track_element(track, format_fields, music_root))
+        if comment_log is not None:
+            idx = track.get("idx") or track.get("database_id")
+            log_entries.append({
+                "idx": idx,
+                "title": _get(track, "title"),
+                "artist": _get(track, "artist"),
+                "comment": build_comment(track, format_fields),
+            })
+
+    if comment_log is not None:
+        log_path = Path(comment_log)
+        log_path.parent.mkdir(parents=True, exist_ok=True)
+        log_path.write_text(json.dumps(log_entries, ensure_ascii=False, indent=2), encoding="utf-8")
 
     raw = ET.tostring(root, encoding="unicode")
     parsed = minidom.parseString(raw)
