@@ -13,7 +13,7 @@ from pathlib import Path
 from typing import Any
 
 from .builder import build_playlist_xml, load_template_items, resolve_template, Templates
-from .config import load_config
+from .config import load_config, DEFAULT_FORMAT
 
 logger = logging.getLogger(__name__)
 
@@ -92,7 +92,7 @@ def export_to_xml(
     else:
         raise TypeError(f"data musí být dict nebo list, ne {type(data).__name__}")
 
-    format_fields: list[str] = cfg.get("format") or []
+    format_fields: list[str] = cfg.get("format") or DEFAULT_FORMAT
     music_root: str = cfg.get("music_root") or ""
 
     # Výběr šablony: parametr přebíjí config
@@ -196,6 +196,6 @@ def export_playlist_xml(
         db_path=cfg["media_db_path"],
         music_root=cfg["music_root"],
         prepis=True,
-        config={"format": [], "dir": None, "music_root": cfg["music_root"]},
+        config={"format": DEFAULT_FORMAT, "dir": None, "music_root": cfg["music_root"]},
     )
     return str(result)

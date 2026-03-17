@@ -113,7 +113,7 @@ def build_comment(data: dict[str, Any], format_fields: list[str]) -> str:
                 artist_pron = _get(data, "artist_pronunciation")
                 text = f"{_ICONS['pronunciation']} {pron}"
                 if artist_pron:
-                    text += f"/{artist_pron}/"
+                    text += f"        /{artist_pron}/"
                 lines.append(text)
                 prev_was_top = True
 
@@ -122,18 +122,23 @@ def build_comment(data: dict[str, Any], format_fields: list[str]) -> str:
             if artist:
                 parts: list[str] = [str(artist)]
                 artist_pron = _get(data, "artist_pronunciation")
-                year = _get(data, "year")
                 if artist_pron:
                     parts.append(f"/{artist_pron}/")
-                if year:
-                    parts.append(f"({year})")
+                
                 lines.append(f"{_ICONS['artist_info']} {' • '.join(parts)}")
                 prev_was_top = True
 
         elif field == "album":
             album = _get(data, "album")
             if album:
-                lines.append(f"{_ICONS['album']} {album}")
+                album_pronunciation = _get(data, "album_pronunciation")
+                year = _get(data, "year")
+                text = f"{_ICONS['album']} {album}"
+                if album_pronunciation:
+                    text += f" /{album_pronunciation}/"
+                if year:
+                    text += f" ({year})"
+                lines.append(text)
                 prev_was_top = True
 
         elif field == "description":
