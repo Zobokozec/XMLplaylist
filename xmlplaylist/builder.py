@@ -193,6 +193,99 @@ def build_comment(data: dict[str, Any], format_fields: list[str]) -> str:
 # Sestavení XML elementů
 # ---------------------------------------------------------------------------
 
+def _resolve_attributes(data: dict[str, Any]) -> list[dict[str, str]]:
+    """Sestaví seznam ``<Attributes><Item>…`` z track dictu.
+
+    Pravidla:
+      1. Vezme ``data["attributes"]`` (typ ``[{name, value}]``) — typicky z mAirList
+         ``item_attributes``.
+      2. Pro standardní atributy (Album, Genre, Track, Year), které v ``data["attributes"]``
+         chybí, doplní hodnotu z odpovídajícího pole track dictu (``album``, ``style``/
+         ``genre``, ``track_number``, ``year``).
+
+    Tím atributy fungují i pro tracky, které mAirList ještě neimportoval.
+    """
+    seen_names: set[str] = set()
+    items: list[dict[str, str]] = []
+
+    raw = data.get("attributes") or []
+    if isinstance(raw, dict):
+        raw = [{"name": k, "value": v} for k, v in raw.items()]
+    for it in raw:
+        if not isinstance(it, dict):
+            continue
+        name = (it.get("name") or "").strip()
+        value = it.get("value")
+        if not name or value is None or value == "":
+            continue
+        items.append({"name": name, "value": str(value)})
+        seen_names.add(name.lower())
+
+    # Doplnění z track dictu (pokud daný atribut neexistuje)
+    fallbacks: list[tuple[str, Any]] = [
+        ("Album",  _get(data, "album")),
+        ("Year",   _get(data, "year")),
+        ("Track",  data.get("track_number") or data.get("track_no")),
+        ("Genre",  data.get("genre") or _join_list(_get(data, "style"))),
+    ]
+    for name, value in fallbacks:
+        if name.lower() in seen_names:
+            continue
+        if value in (None, "", []):
+            continue
+        items.append({"name": name, "value": str(value)})
+        seen_names.add(name.lower())
+
+    return items
+
+
+def _resolve_markers(data: dict[str, Any]) -> list[dict[str, Any]]:
+    """Sestaví seznam markerů (``[{type, position}]``).
+
+    Vezme ``data["markers"]`` (z mAirList ``item_cuemarkers``). Pokud chybí
+    a v dictu jsou samostatná pole ``fade_in``/``fade_out``/``cue_in``/``cue_out``/
+    ``ramp1``/``ramp2`` (sekundy), vytvoří markery z nich.
+    """
+    raw = data.get("markers") or []
+    if isinstance(raw, dict):
+        raw = [{"type": k, "position": v} for k, v in raw.items()]
+
+    markers: list[dict[str, Any]] = []
+    seen: set[str] = set()
+    for m in raw:
+        if not isinstance(m, dict):
+            continue
+        mtype = (m.get("type") or "").strip()
+        pos = m.get("position")
+        if not mtype or pos is None:
+            continue
+        try:
+            pos_f = float(pos)
+        except (TypeError, ValueError):
+            continue
+        markers.append({"type": mtype, "position": pos_f})
+        seen.add(mtype.lower())
+
+    # Fallback z explicitních polí
+    fallbacks = (
+        ("CueIn",   data.get("cue_in")),
+        ("CueOut",  data.get("cue_out")),
+        ("FadeIn",  data.get("fade_in")),
+        ("FadeOut", data.get("fade_out")),
+        ("Ramp1",   data.get("ramp1") or data.get("ramp")),
+        ("Ramp2",   data.get("ramp2")),
+    )
+    for name, value in fallbacks:
+        if name.lower() in seen or value is None:
+            continue
+        try:
+            markers.append({"type": name, "position": float(value)})
+            seen.add(name.lower())
+        except (TypeError, ValueError):
+            continue
+    return markers
+
+
 def build_track_element(
     data: dict[str, Any],
     format_fields: list[str],
@@ -237,6 +330,26 @@ def build_track_element(
     ext_id = data.get("externalid") or data.get("external_id")
     if ext_id:
         ET.SubElement(item, "ExternalID").text = str(ext_id)
+
+    # ── <Attributes> (Album / Genre / Track / Year + cokoli z mAirList) ──
+    attributes = _resolve_attributes(data)
+    if attributes:
+        attrs_el = ET.SubElement(item, "Attributes")
+        for a in attributes:
+            wrap = ET.SubElement(attrs_el, "Item")
+            ET.SubElement(wrap, "Name").text = a["name"]
+            ET.SubElement(wrap, "Value").text = a["value"]
+
+    # ── <Markers> (CueIn, FadeOut, Ramp1, …) ──
+    markers = _resolve_markers(data)
+    if markers:
+        markers_el = ET.SubElement(item, "Markers")
+        for m in markers:
+            ET.SubElement(
+                markers_el, "Marker",
+                Type=m["type"],
+                Position=f"{m['position']:.3f}",
+            )
 
     return item
 

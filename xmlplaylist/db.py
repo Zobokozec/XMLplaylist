@@ -35,6 +35,9 @@ class MediaDBReader:
     def get_by_external_ids(self, external_ids: list[str]) -> list[dict]:
         """Vrátí záznamy z tabulky items odpovídající zadaným external ID.
 
+        Doplňuje i ``markers`` (list ``{type, position}`` z item_cuemarkers)
+        a ``attributes`` (list ``{name, value}`` z item_attributes).
+
         Args:
             external_ids: Seznam external ID ve formátu H{id:06d} (např. ["H039739"]).
 
@@ -46,8 +49,76 @@ class MediaDBReader:
         conn = self._get_connection()
         placeholders = ",".join("?" for _ in external_ids)
         query = f"SELECT * FROM items WHERE externalid IN ({placeholders})"
-        rows = conn.execute(query, external_ids).fetchall()
-        return [dict(row) for row in rows]
+        rows = [dict(r) for r in conn.execute(query, external_ids).fetchall()]
+        if not rows:
+            return rows
+
+        idx_list = [r["idx"] for r in rows if r.get("idx") is not None]
+        markers_by_idx = self._fetch_markers(idx_list)
+        attrs_by_idx = self._fetch_attributes(idx_list)
+        for r in rows:
+            idx = r.get("idx")
+            if idx is None:
+                r["markers"] = []
+                r["attributes"] = []
+            else:
+                r["markers"] = markers_by_idx.get(idx, [])
+                r["attributes"] = attrs_by_idx.get(idx, [])
+        return rows
+
+    def get_markers_attributes_by_idx(
+        self, idx_list: list[int],
+    ) -> dict[int, dict]:
+        """Vrátí ``{idx: {markers: [...], attributes: [...]}}`` z mAirList SQLite.
+
+        Použije se z playlist-generator exporteru, kde tracky vznikají z MariaDB
+        a do MLP se musí dopnit cue markery a rozšířené atributy.
+        """
+        markers = self._fetch_markers(idx_list)
+        attrs = self._fetch_attributes(idx_list)
+        out: dict[int, dict] = {}
+        for idx in idx_list:
+            out[idx] = {
+                "markers":    markers.get(idx, []),
+                "attributes": attrs.get(idx, []),
+            }
+        return out
+
+    def _fetch_markers(self, idx_list: list[int]) -> dict[int, list[dict]]:
+        """Načte cue markery (FadeIn, FadeOut, CueIn, CueOut, Ramp1, Ramp2, …)."""
+        if not idx_list:
+            return {}
+        conn = self._get_connection()
+        placeholders = ",".join("?" for _ in idx_list)
+        query = (
+            f"SELECT item, type, value FROM item_cuemarkers "
+            f"WHERE item IN ({placeholders})"
+        )
+        result: dict[int, list[dict]] = {}
+        for r in conn.execute(query, idx_list).fetchall():
+            result.setdefault(r["item"], []).append(
+                {"type": r["type"], "position": float(r["value"])}
+            )
+        return result
+
+    def _fetch_attributes(self, idx_list: list[int]) -> dict[int, list[dict]]:
+        """Načte rozšířené atributy (Album, Genre, Track, Year, …)."""
+        if not idx_list:
+            return {}
+        conn = self._get_connection()
+        placeholders = ",".join("?" for _ in idx_list)
+        query = (
+            f"SELECT item, name, value FROM item_attributes "
+            f"WHERE item IN ({placeholders})"
+        )
+        result: dict[int, list[dict]] = {}
+        for r in conn.execute(query, idx_list).fetchall():
+            if r["value"] is None:
+                continue
+            result.setdefault(r["item"], []).append(
+                {"name": r["name"], "value": str(r["value"])}
+            )
+        return result
 
     def close(self) -> None:
         """Uzavře spojení s databází."""
